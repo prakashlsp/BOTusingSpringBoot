@@ -23,6 +23,7 @@ public class ChatController {
     @MessageMapping("/message")
     @SendTo("/chatroom/public")
     public Message receiveMessage(@Payload Message message){
+  
         return message;
     }
 
@@ -30,14 +31,11 @@ public class ChatController {
     public Message recMessage(@Payload Message message){
         simpMessagingTemplate.convertAndSendToUser(message.getReceiverName(),"/private",message);
         System.out.println(message.toString());
-        
-        
-        // Generate bot response and send it to the user
-        Message botResponse = chatbotService.generateBotResponse(message);
-        simpMessagingTemplate.convertAndSendToUser(botResponse.getReceiverName(), "/private", botResponse);
-        
+     	 Message botResponse = chatbotService.generateBotResponse(message);
+         simpMessagingTemplate.convertAndSendToUser(botResponse.getReceiverName(), "/private", botResponse);
         return message;
     }
+    
     
 
 }
