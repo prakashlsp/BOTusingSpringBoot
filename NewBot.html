@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Chat Application</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <style>
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .chat-box {
+            display: flex;
+            flex-direction: row;
+            border: 1px solid #ccc;
+            height: 500px;
+        }
+
+        .member-list {
+            width: 200px;
+            border-right: 1px solid #ccc;
+            overflow-y: auto;
+        }
+
+        .member-list ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .member {
+            padding: 10px;
+            cursor: pointer;
+        }
+
+        .member.active {
+            background-color: #f0f0f0;
+        }
+
+        .chat-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+        }
+
+        .message {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+
+        .message.self {
+            justify-content: flex-end;
+        }
+
+        .message .avatar {
+            margin-right: 10px;
+            font-weight: bold;
+        }
+
+        .message.self .avatar {
+            margin-left: 10px;
+            margin-right: 0;
+        }
+
+        .message-data {
+            max-width: 70%;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #e1ffc7;
+        }
+
+        .message.self .message-data {
+            background-color: #daf8e3;
+        }
+
+        .send-message {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #ccc;
+        }
+
+        .input-message {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-right: 10px;
+        }
+
+        .send-button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .register {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .register input {
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .register button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="register" id="register">
+            <input id="username" placeholder="Enter your name" />
+            <button type="button" onclick="registerUser()">Connect</button>
+        </div>
+        <div class="chat-box" id="chat-box" style="display:none;">
+            <div class="member-list">
+                <ul id="member-list">
+                    <li onclick="setTab('CHATROOM')" class="member active" id="CHATROOM-tab">Chatroom</li>
+                </ul>
+            </div>
+            <div class="chat-content">
+                <div class="chat-messages" id="chat-messages"></div>
+                <div class="send-message">
+                    <input type="text" class="input-message" placeholder="Enter the message" id="message-input" />
+                    <button type="button" class="send-button" onclick="sendMessage()">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.1.4/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <script>
+        var stompClient = null;
+        var privateChats = new Map();
+        var publicChats = [];
+        var tab = "CHATROOM";
+        var userData = {
+            username: '',
+            receivername: '',
+            connected: false,
+            message: ''
+        };
+
+        function connect() {
+            let Sock = new SockJS('http://localhost:8080/ws');
+            stompClient = Stomp.over(Sock);  
+            stompClient.connect({}, onConnected, onError);
+        }
+
+        function onConnected() {
+            userData.connected = true;
+            document.getElementById('register').style.display = 'none';
+            document.getElementById('chat-box').style.display = 'flex';
+            stompClient.subscribe('/chatroom/public', onMessageReceived);
+            stompClient.subscribe('/user/' + userData.username + '/private', onPrivateMessage);
+            userJoin();
+        }
+
+        function userJoin() {
+            var chatMessage = {
+                senderName: userData.username,
+                status: "JOIN"
+            };
+            stompClient.send("/app/message", {}, JSON.stringify(chatMessage));
+        }
+
+        function onMessageReceived(payload) {
+            var payloadData = JSON.parse(payload.body);
+            switch (payloadData.status) {
+                case "JOIN":
+                    if (!privateChats.get(payloadData.senderName)) {
+                        privateChats.set(payloadData.senderName, []);
+                        updateMemberList();
+                    }
+                    break;
+                case "MESSAGE":
+                    publicChats.push(payloadData);
+                    updateChatMessages();
+                    break;
+            }
+        }
+
+        function onPrivateMessage(payload) {
+            var payloadData = JSON.parse(payload.body);
+            if (privateChats.get(payloadData.senderName)) {
+                privateChats.get(payloadData.senderName).push(payloadData);
+            } else {
+                let list = [];
+                list.push(payloadData);
+                privateChats.set(payloadData.senderName, list);
+                updateMemberList();
+            }
+            if (tab === payloadData.senderName) {
+                updateChatMessages();
+            }
+        }
+
+        function onError(err) {
+            console.log(err);
+        }
+
+        function handleMessage(event) {
+            userData.message = event.target.value;
+        }
+
+        function sendMessage() {
+            if (stompClient) {
+                var chatMessage = {
+                    senderName: userData.username,
+                    message: userData.message,
+                    status: "MESSAGE"
+                };
+                if (tab === "CHATROOM") {
+                    stompClient.send("/app/message", {}, JSON.stringify(chatMessage));
+                } else {
+                    chatMessage.receiverName = tab;
+                    privateChats.get(tab).push(chatMessage);
+                    stompClient.send("/app/private-message", {}, JSON.stringify(chatMessage));
+                }
+                userData.message = '';
+                document.getElementById('message-input').value = '';
+                updateChatMessages();
+            }
+        }
+
+        function setTab(newTab) {
+            tab = newTab;
+            document.querySelectorAll('.member').forEach(el => el.classList.remove('active'));
+            document.getElementById(tab + '-tab').classList.add('active');
+            updateChatMessages();
+        }
+
+        function updateChatMessages() {
+            var messages = tab === "CHATROOM" ? publicChats : privateChats.get(tab) || [];
+            var chatMessagesElem = document.getElementById('chat-messages');
+            chatMessagesElem.innerHTML = '';
+            messages.forEach(chat => {
+                var messageElem = document.createElement('li');
+                messageElem.className = `message ${chat.senderName === userData.username ? 'self' : ''}`;
+                messageElem.innerHTML = `
+                    ${chat.senderName !== userData.username ? `<div class="avatar">${chat.senderName}</div>` : ''}
+                    <div class="message-data">${chat.message}</div>
+                    ${chat.senderName === userData.username ? `<div class="avatar self">${chat.senderName}</div>` : ''}
+                `;
+                chatMessagesElem.appendChild(messageElem);
+            });
+        }
+
+        function updateMemberList() {
+            var memberListElem = document.getElementById('member-list');
+            memberListElem.innerHTML = '<li onclick="setTab(\'CHATROOM\')" class="member active" id="CHATROOM-tab">Chatroom</li>';
+            privateChats.forEach((_, name) => {
+                memberListElem.innerHTML += `<li onclick="setTab('${name}')" class="member" id="${name}-tab">${name}</li>`;
+            });
+        }
+
+        function registerUser() {
+            userData.username = document.getElementById('username').value.trim();
+            if (userData.username) {
+                connect();
+            }
+        }
+
+        document.getElementById('message-input').addEventListener('input', handleMessage);
+    </script>
+</body>
+
+</html>
