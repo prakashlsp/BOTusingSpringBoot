@@ -1,12 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <title>Chat Application</title>
     <link rel="stylesheet" href="Userui.css">
 </head>
-
 <body>
     <div class="container">
         <div class="register" id="register">
@@ -44,8 +42,8 @@
         };
 
         function connect() {
-            let Sock = new SockJS('http://localhost:8080/ws');
-            stompClient = Stomp.over(Sock);  
+            let Sock = new SockJS('http://10.10.10.126:8080/ws');
+            stompClient = Stomp.over(Sock);
             stompClient.connect({}, onConnected, onError);
         }
 
@@ -70,10 +68,6 @@
             var payloadData = JSON.parse(payload.body);
             switch (payloadData.status) {
                 case "JOIN":
-                    if (!privateChats.get(payloadData.senderName)) {
-                        privateChats.set(payloadData.senderName, []);
-                        updateMemberList();
-                    }
                     break;
                 case "MESSAGE":
                     publicChats.push(payloadData);
@@ -84,21 +78,21 @@
 
         function onPrivateMessage(payload) {
             var payloadData = JSON.parse(payload.body);
-            if (privateChats.get(payloadData.senderName)) {
+            console.log("Private message received: ", payloadData);
+            if (payloadData.senderName !== userData.username) {
+                if (!privateChats.has(payloadData.senderName)) {
+                    privateChats.set(payloadData.senderName, []);
+                }
                 privateChats.get(payloadData.senderName).push(payloadData);
-            } else {
-                let list = [];
-                list.push(payloadData);
-                privateChats.set(payloadData.senderName, list);
+                if (tab === payloadData.senderName) {
+                    updateChatMessages();
+                }
                 updateMemberList();
-            }
-            if (tab === payloadData.senderName) {
-                updateChatMessages();
             }
         }
 
         function onError(err) {
-            console.log(err);
+            console.error("Connection error: ", err);
         }
 
         function handleMessage(event) {
@@ -137,7 +131,7 @@
             var chatMessagesElem = document.getElementById('chat-messages');
             chatMessagesElem.innerHTML = '';
             messages.forEach(chat => {
-                var messageElem = document.createElement('li');
+                var messageElem = document.createElement('div');
                 messageElem.className = `message ${chat.senderName === userData.username ? 'self' : ''}`;
                 messageElem.innerHTML = `
                     ${chat.senderName !== userData.username ? `<div class="avatar">${chat.senderName}</div>` : ''}
@@ -146,6 +140,7 @@
                 `;
                 chatMessagesElem.appendChild(messageElem);
             });
+            chatMessagesElem.scrollTop = chatMessagesElem.scrollHeight;
         }
 
         function updateMemberList() {
@@ -166,5 +161,4 @@
         document.getElementById('message-input').addEventListener('input', handleMessage);
     </script>
 </body>
-
 </html>
