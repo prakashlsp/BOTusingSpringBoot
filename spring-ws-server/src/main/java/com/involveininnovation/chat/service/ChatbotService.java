@@ -28,4 +28,18 @@ public class ChatbotService {
 
         return botMessage;
     }
+    
+    public Message generateInitialBotResponse(String receiverName) {
+        // Generate the initial message from the bot
+    	
+    	
+    	// Create a new Message object for the bot's response
+        Message botMessage = new Message();
+        botMessage.setSenderName("chatbot");
+        botMessage.setReceiverName(receiverName);
+        botMessage.setMessage("Hello! How can I assist you today?");
+        
+        return botMessage;
+     
+    }
 }

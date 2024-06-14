@@ -15,18 +15,14 @@ public class ChatController {
 
     @Autowired
     private SimpMessagingTemplate simpMessagingTemplate;
-    
-    
     @Autowired
     private ChatbotService chatbotService;
-    
     @MessageMapping("/message")
     @SendTo("/chatroom/public")
     public Message receiveMessage(@Payload Message message){
   
         return message;
     }
-
     @MessageMapping("/private-message")
     public Message recMessage(@Payload Message message){
         simpMessagingTemplate.convertAndSendToUser(message.getReceiverName(),"/private",message);
@@ -36,6 +32,10 @@ public class ChatController {
         return message;
     }
     
-    
-
+    @MessageMapping("/user-join")
+    public void userJoin(@Payload Message message) {
+        simpMessagingTemplate.convertAndSendToUser(message.getReceiverName(), "/private", message);
+        Message botResponse = chatbotService.generateInitialBotResponse(message.getSenderName());
+        simpMessagingTemplate.convertAndSendToUser(botResponse.getReceiverName(), "/private", botResponse);
+    }
 }
